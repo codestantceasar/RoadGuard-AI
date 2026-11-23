@@ -1,4 +1,5 @@
 # RoadGuard AI
+
 ### Intelligent Road Infrastructure Monitoring System
 
 RoadGuard AI is an image-based road damage classification and monitoring system powered by deep learning.
@@ -33,11 +34,9 @@ An image with none of these four labels is not necessarily damage-free; it may c
 
 The project uses the India and Czech subsets of RDD2022.
 
-**Dataset source:**
+**Dataset source:** [Road Damage Dataset 2022 (RDD2022)](https://figshare.com/articles/dataset/RDD2022_-_The_multi-national_Road_Damage_Dataset_released_through_CRDDC_2022/21431547)
 
-[Road Damage Dataset 2022 (RDD2022)](https://figshare.com/articles/dataset/RDD2022_-_The_multi-national_Road_Damage_Dataset_released_through_CRDDC_2022/21431547)
-
-Dataset preparation:
+### Dataset preparation
 
 | Dataset component | Images |
 |---|---:|
@@ -56,14 +55,14 @@ Raw images are excluded from this repository because of their size. Download the
 
 The model uses MobileNetV2 with ImageNet pretrained weights.
 
-Architecture:
+### Architecture
 
 1. MobileNetV2 feature extractor
 2. Global Average Pooling
 3. Dropout
 4. Dense output layer with four sigmoid units
 
-Configuration:
+### Configuration
 
 | Parameter | Value |
 |---|---|
@@ -74,11 +73,11 @@ Configuration:
 | Loss | Binary cross-entropy |
 | Task | Multi-label classification |
 
-Class-specific thresholds convert probabilities into predictions.
+Class-specific thresholds convert predicted probabilities into final class predictions.
 
 ## 5. Model Evaluation
 
-Metrics include macro precision, macro recall, macro F1, micro F1, and macro ROC-AUC.
+Evaluation metrics include macro precision, macro recall, macro F1, micro F1, and macro ROC-AUC.
 
 ### Previous versus candidate model
 
@@ -90,22 +89,24 @@ Metrics include macro precision, macro recall, macro F1, micro F1, and macro ROC
 | Micro F1 | 0.4676 | 0.4868 |
 | Macro ROC-AUC | 0.7516 | 0.7552 |
 
-The candidate improved the reported aggregate metrics and passed the configured promotion checks.
+The candidate improved all reported aggregate metrics and passed the configured promotion checks.
 
 D10 has relatively few positive test examples, so its evaluation is less reliable.
 
-The test split was used in multiple development evaluations. These results should be interpreted as development results, not as a pristine independent final evaluation.
+**Evaluation limitation:** The test split was used in multiple development evaluations. These results should therefore be interpreted as development results, not as a pristine independent final evaluation.
 
 ## 6. Project Structure
 
 ```text
-roadguard-ai/
+RoadGuard-AI/
 ├── api/
 ├── dashboard/
 ├── data/
 │   ├── metadata/
-│   └── processed/
+│   ├── processed/
+│   └── uploads/
 ├── locust/
+│   └── test_data/
 ├── models/
 │   ├── roadguard_best.keras
 │   ├── roadguard_final.keras
@@ -114,6 +115,8 @@ roadguard-ai/
 │   └── nginx.conf
 ├── notebooks/
 │   └── roadguard_model.ipynb
+├── outputs/
+│   └── cloud-loadtest/
 ├── src/
 ├── Dockerfile
 ├── docker-compose.yml
@@ -121,6 +124,8 @@ roadguard-ai/
 ├── requirements-docker.txt
 └── README.md
 ```
+
+Raw dataset images are not included in the repository.
 
 ## 7. Local Installation and Setup
 
@@ -135,24 +140,25 @@ roadguard-ai/
 
 ```bash
 git clone https://github.com/codestantceasar/RoadGuard-AI.git
+
 cd RoadGuard-AI
 ```
 
 ### Install Python dependencies
 
-Create and activate a virtual environment:
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
 ```
 
-Linux/macOS:
+Activate it on Linux/macOS:
 
 ```bash
 source .venv/bin/activate
 ```
 
-Windows PowerShell:
+Activate it on Windows PowerShell:
 
 ```powershell
 .venv\Scripts\Activate.ps1
@@ -205,15 +211,15 @@ The FastAPI application provides the following endpoints:
 
 The prediction endpoint accepts JPEG and PNG images up to 10 MB.
 
-Example health check:
+### Example health check
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-Interactive API documentation is available at:
+Interactive API documentation:
 
-`http://localhost:8000/docs`
+http://localhost:8000/docs
 
 ## 9. Dashboard Features
 
@@ -245,13 +251,18 @@ The workflow includes:
 6. Applying configured promotion checks.
 7. Promoting an accepted candidate model.
 
-This workflow helps demonstrate model lifecycle management and controlled model updates.
+This workflow demonstrates model lifecycle management and controlled model updates.
 
 ## 11. Load Testing with Locust
 
 Locust is used to evaluate API performance under concurrent requests.
 
-The project includes a Locust test configuration for API endpoints.
+The project includes a Locust test configuration that tests:
+
+- `GET /health`: Checks API availability and model status.
+- `POST /predict`: Uploads an image and checks the prediction response.
+
+### Run Locust locally
 
 Start the optional Locust service:
 
@@ -261,7 +272,7 @@ docker compose --profile loadtest up -d locust
 
 Access the Locust interface:
 
-`http://localhost:8089`
+http://localhost:8089
 
 ### Local Load Test Results
 
@@ -280,18 +291,66 @@ The recorded local load test used:
 | 99th percentile | 230 ms |
 | Requests per second | 5.1 |
 
-### Endpoint performance
+### Local endpoint performance
 
 | Endpoint | Requests | Failures | Average response |
 |---|---:|---:|---:|
 | GET `/health` | 113 | 0 | 10.91 ms |
 | POST `/predict` | 457 | 0 | 112 ms |
 
-These measurements represent the recorded local Docker load test. They should not be interpreted as AWS cloud load-testing results.
+These measurements represent the recorded local Docker load test and are separate from the AWS cloud results.
+
+### AWS Cloud Load Test Results
+
+The deployed AWS application was also tested using Locust.
+
+**Test configuration:**
+
+| Configuration | Value |
+|---|---:|
+| Virtual users | 10 |
+| Spawn rate | 2 users/second |
+| Duration | 2 minutes |
+| Total requests | 579 |
+| Failed requests | 0 |
+| Average response time | 61.15 ms |
+| Median response time | 63 ms |
+| 90th percentile | 97 ms |
+| 95th percentile | 120 ms |
+| 99th percentile | 160 ms |
+| Maximum response time | 290 ms |
+| Throughput | 4.86 requests/second |
+
+### AWS endpoint performance
+
+| Endpoint | Requests | Failures | Average response |
+|---|---:|---:|---:|
+| GET `/health` | 105 | 0 | 9.29 ms |
+| POST `/predict` | 474 | 0 | 72.63 ms |
+| **Total** | **579** | **0** | **61.15 ms** |
+
+The AWS test completed all recorded requests without failures or Locust exceptions.
+
+These measurements represent one controlled cloud load-test run. They should not be interpreted as the maximum capacity of the deployment.
+
+### Load Test Reports
+
+Locust generated the following report files:
+
+```text
+outputs/cloud-loadtest/
+├── aws_locust_exceptions.csv
+├── aws_locust_failures.csv
+├── aws_locust_report.html
+├── aws_locust_stats.csv
+└── aws_locust_stats_history.csv
+```
+
+These files contain detailed request statistics, failure information, response-time history, and an HTML report.
 
 ## 12. AWS Cloud Deployment
 
-RoadGuard AI was successfully deployed to an Amazon EC2 instance running Ubuntu Server 24.04 LTS.
+RoadGuard AI was deployed to an Amazon EC2 instance running Ubuntu Server 24.04 LTS.
 
 ### Cloud Infrastructure
 
@@ -301,7 +360,7 @@ RoadGuard AI was successfully deployed to an Amazon EC2 instance running Ubuntu 
 | Service | Amazon EC2 |
 | Operating system | Ubuntu Server 24.04 LTS |
 | AWS region | Stockholm (`eu-north-1`) |
-| Instance type | m7i-flex.large |
+| Instance type | `m7i-flex.large` |
 | Container runtime | Docker |
 | Orchestration | Docker Compose |
 | Reverse proxy | Nginx |
@@ -320,7 +379,7 @@ http://13.48.29.8:8000/docs
 
 http://13.48.29.8:8000/health
 
-Note: Dashboard access is restricted through the AWS security group to an authorized IP address. The EC2 public IP may change if the instance is stopped and restarted.
+**Note:** These URLs use the EC2 public IP recorded during deployment. The IP may change if the instance is stopped and restarted. Dashboard access is restricted through the AWS security group to an authorized IP address.
 
 ### Deployment Architecture
 
@@ -334,7 +393,7 @@ Docker Compose manages the application containers.
 
 ### Cloud Deployment Verification
 
-The following deployment checks were completed successfully:
+The following checks were completed successfully:
 
 | Test | Result |
 |---|---|
@@ -343,7 +402,7 @@ The following deployment checks were completed successfully:
 | API container | Healthy |
 | Nginx container | Healthy |
 | Dashboard container | Running |
-| API health check | Online |
+| API health check | Successful |
 | Dashboard access | Successful |
 | API documentation | Accessible |
 | Image upload | Successful |
@@ -392,8 +451,9 @@ These measurements represent an individual successful cloud prediction test, not
 - D10 classification performance is relatively weak.
 - Model predictions are experimental and may produce false positives or false negatives.
 - Dataset distribution may differ from real-world road conditions.
-- The evaluation results are development results and should not be treated as independent final validation.
+- Evaluation results are development results and should not be treated as independent final validation.
 - Cloud prediction response times may vary depending on infrastructure and network conditions.
+- The current cloud deployment does not implement full production-grade authentication or security controls.
 
 RoadGuard AI is an experimental decision-support system. Predictions should be reviewed by qualified road inspectors before infrastructure decisions are made.
 
