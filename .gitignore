@@ -1,0 +1,30 @@
+# Python environments
+.venv/
+.venv-*/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Secrets
+.env
+.env.*
+
+# Raw and uploaded datasets
+data/raw/
+data/uploads/
+
+# Generated training outputs
+outputs/
+
+# Logs and system files
+*.log
+.DS_Store
+
+# Backup files
+*.backup
+*.backup_*
