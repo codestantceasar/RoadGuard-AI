@@ -43,6 +43,7 @@ services:
       - ./data/uploads:/app/data/uploads
       - ./data/processed:/app/data/processed:ro
       - ./data/raw:/app/data/raw:ro
+      - ./data/external:/app/data/external:ro
       - ./outputs/retraining:/app/outputs/retraining
     depends_on:
       nginx:

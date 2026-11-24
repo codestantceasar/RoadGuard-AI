@@ -17,6 +17,7 @@ __pycache__/
 # Raw and uploaded datasets
 data/raw/
 data/uploads/
+data/external/
 
 # Generated training outputs
 outputs/

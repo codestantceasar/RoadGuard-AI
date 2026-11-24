@@ -1,6 +1,7 @@
-
 import sys
 import os
+import json
+import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -8,16 +9,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import json
-import time
-from pathlib import Path
-
 import requests
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# ---------------- CONFIGURATION ----------------
+
+# ==================================================
+# CONFIGURATION
+# ==================================================
 
 st.set_page_config(
     page_title="RoadGuard AI",
@@ -26,7 +26,16 @@ st.set_page_config(
 )
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
-THRESHOLD_PATH = Path("models/thresholds.json")
+
+UPLOAD_IMAGE_DIR = PROJECT_ROOT / "data/uploads/images"
+UPLOAD_LABEL_DIR = PROJECT_ROOT / "data/uploads/labels"
+UPLOAD_LABEL_FILE = UPLOAD_LABEL_DIR / "labels.csv"
+
+RETRAINING_REPORT = (
+    PROJECT_ROOT / "outputs/retraining/candidate_evaluation.json"
+)
+
+DAMAGE_CODES = ["D00", "D10", "D20", "D40"]
 
 CLASSES = {
     "D00": "Longitudinal cracks",
@@ -35,9 +44,13 @@ CLASSES = {
     "D40": "Potholes"
 }
 
-# ---------------- HEADER ----------------
+
+# ==================================================
+# HEADER
+# ==================================================
 
 st.title("🛣️ RoadGuard AI")
+
 st.subheader("Intelligent Road Infrastructure Monitoring System")
 
 st.write(
@@ -47,7 +60,10 @@ st.write(
 
 st.divider()
 
-# ---------------- API MONITORING ----------------
+
+# ==================================================
+# API MONITORING
+# ==================================================
 
 st.header("System Monitoring")
 
@@ -55,13 +71,22 @@ col1, col2 = st.columns(2)
 
 try:
     start_time = time.perf_counter()
-    response = requests.get(f"{API_URL}/health", timeout=5)
+
+    response = requests.get(
+        f"{API_URL}/health",
+        timeout=5
+    )
+
     response.raise_for_status()
+
     elapsed = (time.perf_counter() - start_time) * 1000
     health = response.json()
 
     col1.metric("API Status", "Online")
-    col2.metric("Health Check Response", f"{elapsed:.2f} ms")
+    col2.metric(
+        "Health Check Response",
+        f"{elapsed:.2f} ms"
+    )
 
     if not health.get("model_loaded", False):
         st.warning("API is online, but the model is not loaded.")
@@ -69,11 +94,18 @@ try:
 except requests.RequestException:
     col1.metric("API Status", "Offline")
     col2.metric("Health Check Response", "Unavailable")
-    st.error("Cannot connect to the RoadGuard API. Start the API server first.")
+
+    st.error(
+        "Cannot connect to the RoadGuard API. "
+        "Start the API server first."
+    )
 
 st.divider()
 
-# ---------------- DATASET ANALYTICS ----------------
+
+# ==================================================
+# DATASET ANALYTICS
+# ==================================================
 
 st.header("Road Damage Dataset Analytics")
 
@@ -83,24 +115,30 @@ st.write(
     "present in each image."
 )
 
-import pandas as pd
-import matplotlib.pyplot as plt
 
 @st.cache_data
 def load_dataset_splits():
-    train = pd.read_csv("data/processed/train.csv")
-    validation = pd.read_csv("data/processed/validation.csv")
-    test = pd.read_csv("data/processed/test.csv")
+
+    train = pd.read_csv(
+        PROJECT_ROOT / "data/processed/train.csv"
+    )
+
+    validation = pd.read_csv(
+        PROJECT_ROOT / "data/processed/validation.csv"
+    )
+
+    test = pd.read_csv(
+        PROJECT_ROOT / "data/processed/test.csv"
+    )
 
     return pd.concat(
         [train, validation, test],
         ignore_index=True
     )
 
+
 try:
     dataset_df = load_dataset_splits()
-
-    damage_classes = ["D00", "D10", "D20", "D40"]
 
     class_names = {
         "D00": "Longitudinal cracks",
@@ -109,38 +147,49 @@ try:
         "D40": "Potholes"
     }
 
-    # Dataset overview
     total_images = len(dataset_df)
 
-    label_counts = dataset_df[damage_classes].sum(axis=1)
+    label_counts = dataset_df[DAMAGE_CODES].sum(axis=1)
 
     no_damage = int((label_counts == 0).sum())
-    single_damage = int((label_counts == 1).sum())
+
     multiple_damage = int((label_counts > 1).sum())
 
     col1, col2, col3 = st.columns(3)
 
     col1.metric("Total Images", f"{total_images:,}")
-    col2.metric("Multiple Damage Classes", f"{multiple_damage:,}")
-    col3.metric("No Selected Target Class", f"{no_damage:,}")
+
+    col2.metric(
+        "Multiple Damage Classes",
+        f"{multiple_damage:,}"
+    )
+
+    col3.metric(
+        "No Selected Target Class",
+        f"{no_damage:,}"
+    )
 
     # Chart 1: Class distribution
+
     st.subheader("1. Road Damage Class Distribution")
 
-    class_counts = dataset_df[damage_classes].sum()
+    class_counts = dataset_df[DAMAGE_CODES].sum()
 
     fig, ax = plt.subplots(figsize=(9, 4))
 
     ax.bar(
-        [class_names[c] for c in damage_classes],
+        [class_names[c] for c in DAMAGE_CODES],
         class_counts.values
     )
 
     ax.set_ylabel("Number of Images")
+
     ax.set_title("Distribution of Road Damage Classes")
+
     ax.tick_params(axis="x", rotation=15)
 
     st.pyplot(fig)
+
     plt.close(fig)
 
     st.write(
@@ -150,27 +199,30 @@ try:
     )
 
     # Chart 2: Class co-occurrence
+
     st.subheader("2. Damage Class Co-occurrence")
 
     co_occurrence = (
-        dataset_df[damage_classes].astype(int).T
-        @ dataset_df[damage_classes].astype(int)
+        dataset_df[DAMAGE_CODES].astype(int).T
+        @ dataset_df[DAMAGE_CODES].astype(int)
     )
 
     fig, ax = plt.subplots(figsize=(7, 5))
 
     image = ax.imshow(co_occurrence.values)
 
-    ax.set_xticks(range(len(damage_classes)))
-    ax.set_yticks(range(len(damage_classes)))
+    ax.set_xticks(range(len(DAMAGE_CODES)))
 
-    ax.set_xticklabels(damage_classes)
-    ax.set_yticklabels(damage_classes)
+    ax.set_yticks(range(len(DAMAGE_CODES)))
+
+    ax.set_xticklabels(DAMAGE_CODES)
+
+    ax.set_yticklabels(DAMAGE_CODES)
 
     ax.set_title("Damage Class Co-occurrence")
 
-    for i in range(len(damage_classes)):
-        for j in range(len(damage_classes)):
+    for i in range(len(DAMAGE_CODES)):
+        for j in range(len(DAMAGE_CODES)):
             ax.text(
                 j,
                 i,
@@ -179,9 +231,14 @@ try:
                 va="center"
             )
 
-    fig.colorbar(image, ax=ax, label="Number of Images")
+    fig.colorbar(
+        image,
+        ax=ax,
+        label="Number of Images"
+    )
 
     st.pyplot(fig)
+
     plt.close(fig)
 
     st.write(
@@ -191,6 +248,7 @@ try:
     )
 
     # Chart 3: Number of damage classes per image
+
     st.subheader("3. Damage Classes Per Image")
 
     distribution = (
@@ -202,14 +260,24 @@ try:
     fig, ax = plt.subplots(figsize=(8, 4))
 
     ax.bar(
-        ["0 classes", "1 class", "2 classes", "3 classes", "4 classes"],
+        [
+            "0 classes",
+            "1 class",
+            "2 classes",
+            "3 classes",
+            "4 classes"
+        ],
         distribution.values
     )
 
     ax.set_ylabel("Number of Images")
-    ax.set_title("Number of Selected Damage Classes Per Image")
+
+    ax.set_title(
+        "Number of Selected Damage Classes Per Image"
+    )
 
     st.pyplot(fig)
+
     plt.close(fig)
 
     st.write(
@@ -225,17 +293,23 @@ try:
     )
 
 except Exception as error:
-    st.error(f"Could not load dataset analytics: {error}")
+    st.error(
+        f"Could not load dataset analytics: {error}"
+    )
 
 st.divider()
 
-# ---------------- IMAGE PREDICTION ----------------
+
+# ==================================================
+# IMAGE PREDICTION
+# ==================================================
 
 st.header("Road Damage Prediction")
 
 uploaded_file = st.file_uploader(
     "Upload a road image",
-    type=["jpg", "jpeg", "png"]
+    type=["jpg", "jpeg", "png"],
+    key="prediction_image"
 )
 
 if uploaded_file is not None:
@@ -246,7 +320,10 @@ if uploaded_file is not None:
         use_container_width=True
     )
 
-    if st.button("Analyze Road Image", type="primary"):
+    if st.button(
+        "Analyze Road Image",
+        type="primary"
+    ):
 
         with st.spinner("Analyzing image..."):
 
@@ -269,14 +346,19 @@ if uploaded_file is not None:
                     timeout=120
                 )
 
-                elapsed = (time.perf_counter() - start_time) * 1000
+                elapsed = (
+                    time.perf_counter() - start_time
+                ) * 1000
 
                 if response.status_code == 200:
 
                     result = response.json()
+
                     predictions = result["predictions"]
 
-                    st.success("Prediction completed successfully!")
+                    st.success(
+                        "Prediction completed successfully!"
+                    )
 
                     st.metric(
                         "Prediction Response Time",
@@ -293,13 +375,17 @@ if uploaded_file is not None:
                             "Damage Class": code,
                             "Description": CLASSES[code],
                             "Probability (%)": round(
-                                details["probability"] * 100, 2
+                                details["probability"] * 100,
+                                2
                             ),
                             "Threshold (%)": round(
-                                details["threshold"] * 100, 2
+                                details["threshold"] * 100,
+                                2
                             ),
                             "Detected": (
-                                "Yes" if details["detected"] else "No"
+                                "Yes"
+                                if details["detected"]
+                                else "No"
                             )
                         })
 
@@ -315,7 +401,8 @@ if uploaded_file is not None:
 
                     chart_df = pd.DataFrame({
                         "Damage Class": [
-                            CLASSES[code] for code in predictions
+                            CLASSES[code]
+                            for code in predictions
                         ],
                         "Probability": [
                             details["probability"] * 100
@@ -334,38 +421,54 @@ if uploaded_file is not None:
                     ]
 
                     if detected:
+
                         st.warning(
                             "Possible road damage detected: "
                             + ", ".join(detected)
                         )
+
                     else:
+
                         st.info(
                             "No selected damage class crossed its "
                             "detection threshold."
                         )
 
                 else:
+
                     st.error(
                         f"API error {response.status_code}: "
                         f"{response.text}"
                     )
 
             except requests.RequestException as error:
-                st.error(f"Could not contact the API: {error}")
+
+                st.error(
+                    f"Could not contact the API: {error}"
+                )
 
             except Exception as error:
-                st.error(f"Prediction failed: {error}")
+
+                st.error(
+                    f"Prediction failed: {error}"
+                )
+
 
 st.divider()
 
-# ---------------- MODEL INFORMATION ----------------
+
+# ==================================================
+# MODEL INFORMATION
+# ==================================================
 
 st.header("Model Information")
 
 info1, info2, info3 = st.columns(3)
 
 info1.metric("Architecture", "MobileNetV2")
+
 info2.metric("Image Size", "160 × 160")
+
 info3.metric("Damage Classes", "4")
 
 st.caption(
@@ -374,140 +477,369 @@ st.caption(
     "before infrastructure decisions are made."
 )
 
-# ---------------- BULK UPLOAD AND RETRAINING ----------------
+
+# ==================================================
+# BULK UPLOAD AND RETRAINING
+# ==================================================
 
 st.divider()
 
 st.header("Bulk Upload and Model Retraining")
 
 st.write(
-    "Upload new road images together with a CSV file "
-    "containing their verified damage labels."
+    "Use existing verified road images and labels, "
+    "or stage a new labelled dataset for retraining."
 )
 
-uploaded_images = st.file_uploader(
-    "Upload multiple road images (JPEG)",
-    type=["jpg", "jpeg"],
-    accept_multiple_files=True,
-    key="bulk_images"
-)
 
-uploaded_labels = st.file_uploader(
-    "Upload the labels CSV",
-    type=["csv"],
-    key="bulk_labels"
-)
+# --------------------------------------------------
+# VALIDATE EXISTING UPLOADS ON FIRST DASHBOARD LOAD
+# --------------------------------------------------
 
-st.caption(
-    "Required CSV columns: filename, D00, D10, D20, D40. "
-    "Use 1 for present and 0 for absent."
-)
+from src.retraining import validate_uploads
 
-if st.button("Validate and Stage Uploads"):
+if "uploads_validated" not in st.session_state:
 
-    if not uploaded_images or uploaded_labels is None:
-        st.error("Upload images and a labels CSV first.")
+    st.session_state["uploads_validated"] = False
 
-    else:
-        from pathlib import Path
-        from src.retraining import validate_uploads
+    st.session_state["validated_uploads_df"] = None
 
-        image_dir = Path("data/uploads/images")
-        label_dir = Path("data/uploads/labels")
+    try:
 
-        image_dir.mkdir(parents=True, exist_ok=True)
-        label_dir.mkdir(parents=True, exist_ok=True)
+        existing_df = validate_uploads()
 
-        label_path = label_dir / "labels.csv"
-        staged_images = []
-        labels_written = False
-
-        DAMAGE_CODES = ["D00", "D10", "D20", "D40"]
-
-        try:
-            filenames = [file.name for file in uploaded_images]
-
-            if len(filenames) != len(set(filenames)):
-                raise ValueError("Duplicate image filenames uploaded.")
-
-            for filename in filenames:
-                if Path(filename).name != filename:
-                    raise ValueError(f"Invalid filename: {filename}")
-
-                if Path(filename).suffix.lower() not in [".jpg", ".jpeg"]:
-                    raise ValueError(
-                        f"{filename}: only JPG/JPEG images are accepted."
-                    )
-
-                if (image_dir / filename).exists():
-                    raise ValueError(
-                        f"{filename} already exists. "
-                        "Remove the old upload before replacing it."
-                    )
-
-            if label_path.exists():
-                raise ValueError(
-                    "A labels.csv already exists in the staging folder. "
-                    "Resolve the previous upload before starting a new one."
-                )
-
-            # Save images and keep track of every new file.
-            for uploaded_image in uploaded_images:
-                image_path = image_dir / uploaded_image.name
-                image_path.write_bytes(uploaded_image.getvalue())
-                staged_images.append(image_path)
-
-            label_path.write_bytes(uploaded_labels.getvalue())
-            labels_written = True
-
-            # Validate the staged images and labels.
-            validated_df = validate_uploads()
-
-            if set(validated_df["filename"]) != set(filenames):
-                raise ValueError(
-                    "The CSV filenames must match the uploaded images exactly."
-                )
+        if not existing_df.empty:
 
             st.session_state["uploads_validated"] = True
 
-            st.success("Upload validation successful!")
-            st.write("Validated images:", len(validated_df))
+            st.session_state["validated_uploads_df"] = existing_df
 
-            st.dataframe(
-                validated_df[["filename"] + DAMAGE_CODES],
-                use_container_width=True,
-                hide_index=True
-            )
+    except Exception as error:
 
-        except Exception as error:
-            # Roll back files created by this upload attempt.
-            for image_path in staged_images:
-                image_path.unlink(missing_ok=True)
+        st.session_state["uploads_validated"] = False
 
-            if labels_written:
-                label_path.unlink(missing_ok=True)
+        st.session_state["validated_uploads_df"] = None
 
-            st.session_state["uploads_validated"] = False
-            st.error(f"Upload validation failed: {error}")
+        st.session_state["upload_validation_error"] = str(error)
 
 
-# ---------------- RETRAINING CONTROL ----------------
+# --------------------------------------------------
+# EXISTING VALIDATED DATASET
+# --------------------------------------------------
 
-if st.session_state.get("uploads_validated", False):
+existing_images = (
+    list(UPLOAD_IMAGE_DIR.glob("*.jpg"))
+    + list(UPLOAD_IMAGE_DIR.glob("*.jpeg"))
+) if UPLOAD_IMAGE_DIR.exists() else []
 
-    st.info(
-        "Your new labelled images are ready for retraining."
+labels_exist = UPLOAD_LABEL_FILE.is_file()
+
+st.subheader("Existing Uploaded Dataset")
+
+if st.session_state["uploads_validated"]:
+
+    validated_df = st.session_state["validated_uploads_df"]
+
+    st.success(
+        "Existing uploaded images and labels have been validated."
     )
 
-    if st.button("Start Model Retraining", type="primary"):
+    st.metric(
+        "Validated Uploaded Images",
+        len(validated_df)
+    )
+
+    display_df = validated_df.copy()
+
+    display_df.insert(
+        0,
+        "filename",
+        display_df["image_path"].apply(
+            lambda path: Path(path).name
+        )
+    )
+
+    st.caption(
+        "The existing files are being reused. "
+        "You do not need to upload them again."
+    )
+
+    with st.expander("View validated upload labels"):
+
+        st.dataframe(
+            display_df[
+                ["filename"] + DAMAGE_CODES
+            ],
+            use_container_width=True,
+            hide_index=True
+        )
+
+elif existing_images or labels_exist:
+
+    st.error(
+        "Existing upload files were found, but validation did not "
+        "complete successfully."
+    )
+
+    validation_error = st.session_state.get(
+        "upload_validation_error"
+    )
+
+    if validation_error:
+        st.error(validation_error)
+
+    if st.button("Revalidate Existing Uploads"):
 
         try:
+
+            validated_df = validate_uploads()
+
+            if validated_df.empty:
+
+                st.session_state["uploads_validated"] = False
+
+                st.session_state["validated_uploads_df"] = None
+
+                st.warning(
+                    "No labelled uploaded images were found."
+                )
+
+            else:
+
+                st.session_state["uploads_validated"] = True
+
+                st.session_state["validated_uploads_df"] = validated_df
+
+                st.session_state.pop(
+                    "upload_validation_error",
+                    None
+                )
+
+                st.success(
+                    f"Successfully validated {len(validated_df)} images."
+                )
+
+        except Exception as error:
+
+            st.error(
+                f"Upload validation failed: {error}"
+            )
+
+
+# --------------------------------------------------
+# NEW UPLOAD INTERFACE
+# Only shown when there are no existing staged files.
+# --------------------------------------------------
+
+elif not existing_images and not labels_exist:
+
+    st.subheader("Upload a New Dataset")
+
+    uploaded_images = st.file_uploader(
+        "Upload multiple road images (JPEG)",
+        type=["jpg", "jpeg"],
+        accept_multiple_files=True,
+        key="bulk_images"
+    )
+
+    uploaded_labels = st.file_uploader(
+        "Upload the labels CSV",
+        type=["csv"],
+        key="bulk_labels"
+    )
+
+    st.caption(
+        "Required CSV columns: filename, D00, D10, D20, D40. "
+        "Use 1 for present and 0 for absent."
+    )
+
+    if st.button("Validate and Stage Uploads"):
+
+        if not uploaded_images or uploaded_labels is None:
+
+            st.error(
+                "Upload images and a labels CSV first."
+            )
+
+        else:
+
+            staged_images = []
+
+            labels_written = False
+
+            label_path = UPLOAD_LABEL_FILE
+
+            try:
+
+                UPLOAD_IMAGE_DIR.mkdir(
+                    parents=True,
+                    exist_ok=True
+                )
+
+                UPLOAD_LABEL_DIR.mkdir(
+                    parents=True,
+                    exist_ok=True
+                )
+
+                filenames = [
+                    file.name for file in uploaded_images
+                ]
+
+                if len(filenames) != len(set(filenames)):
+
+                    raise ValueError(
+                        "Duplicate image filenames uploaded."
+                    )
+
+                for filename in filenames:
+
+                    if Path(filename).name != filename:
+
+                        raise ValueError(
+                            f"Invalid filename: {filename}"
+                        )
+
+                    if Path(filename).suffix.lower() not in [
+                        ".jpg",
+                        ".jpeg"
+                    ]:
+
+                        raise ValueError(
+                            f"{filename}: only JPG/JPEG images "
+                            "are accepted."
+                        )
+
+                    if (UPLOAD_IMAGE_DIR / filename).exists():
+
+                        raise ValueError(
+                            f"{filename} already exists. "
+                            "Existing files will not be overwritten."
+                        )
+
+                if label_path.exists():
+
+                    raise ValueError(
+                        "A labels.csv already exists. "
+                        "Existing staged data will not be overwritten."
+                    )
+
+                # Stage new images.
+
+                for uploaded_image in uploaded_images:
+
+                    image_path = (
+                        UPLOAD_IMAGE_DIR / uploaded_image.name
+                    )
+
+                    image_path.write_bytes(
+                        uploaded_image.getvalue()
+                    )
+
+                    staged_images.append(image_path)
+
+                # Stage labels.
+
+                label_path.write_bytes(
+                    uploaded_labels.getvalue()
+                )
+
+                labels_written = True
+
+                # Validate all staged files.
+
+                validated_df = validate_uploads()
+
+                if len(validated_df) != len(filenames):
+
+                    raise ValueError(
+                        "The validated image count does not "
+                        "match the uploaded image count."
+                    )
+
+                validated_filenames = {
+                    Path(path).name
+                    for path in validated_df["image_path"]
+                }
+
+                if validated_filenames != set(filenames):
+
+                    raise ValueError(
+                        "The CSV filenames do not match "
+                        "the uploaded images."
+                    )
+
+                st.session_state["uploads_validated"] = True
+
+                st.session_state["validated_uploads_df"] = validated_df
+
+                st.success(
+                    "Upload validation successful!"
+                )
+
+                st.write(
+                    "Validated images:",
+                    len(validated_df)
+                )
+
+                st.rerun()
+
+            except Exception as error:
+
+                # Roll back only files created by this attempt.
+
+                for image_path in staged_images:
+
+                    image_path.unlink(missing_ok=True)
+
+                if labels_written:
+
+                    label_path.unlink(missing_ok=True)
+
+                st.session_state["uploads_validated"] = False
+
+                st.session_state["validated_uploads_df"] = None
+
+                st.error(
+                    f"Upload validation failed: {error}"
+                )
+
+
+# ==================================================
+# RETRAINING CONTROL
+# ==================================================
+
+st.divider()
+
+st.subheader("Model Retraining")
+
+if st.session_state["uploads_validated"]:
+
+    st.success(
+        "Your existing labelled images are ready for retraining."
+    )
+
+    st.warning(
+        "Retraining may take several minutes. "
+        "Keep this dashboard open while the process runs."
+    )
+
+    if st.button(
+        "Start Model Retraining",
+        type="primary"
+    ):
+
+        try:
+
             from src.retraining import retrain
-            from src.evaluate_candidate import main as evaluate_candidate
+
+            from src.evaluate_candidate import (
+                main as evaluate_candidate
+            )
 
             with st.spinner(
-                "Retraining RoadGuard AI. Please wait..."
+                "Preparing data and retraining RoadGuard AI..."
             ):
+
                 retrain()
 
             st.success(
@@ -517,21 +849,23 @@ if st.session_state.get("uploads_validated", False):
             with st.spinner(
                 "Evaluating candidate against the current model..."
             ):
+
                 evaluate_candidate()
 
-            import json
-            from pathlib import Path
+            if not RETRAINING_REPORT.is_file():
 
-            report_path = Path(
-                "outputs/retraining/candidate_evaluation.json"
-            )
+                raise FileNotFoundError(
+                    "Candidate evaluation report was not created."
+                )
 
-            with open(report_path) as file:
+            with open(RETRAINING_REPORT) as file:
+
                 report = json.load(file)
 
             st.subheader("Candidate Evaluation Results")
 
             current_f1 = report["current_metrics"]["macro_f1"]
+
             candidate_f1 = report["candidate_metrics"]["macro_f1"]
 
             col1, col2 = st.columns(2)
@@ -556,11 +890,26 @@ if st.session_state.get("uploads_validated", False):
             ].items():
 
                 comparison_rows.append({
+
                     "Damage Class": class_name,
-                    "Current F1": round(result["current_f1"], 4),
-                    "Candidate F1": round(result["candidate_f1"], 4),
-                    "Difference": round(result["difference"], 4),
+
+                    "Current F1": round(
+                        result["current_f1"],
+                        4
+                    ),
+
+                    "Candidate F1": round(
+                        result["candidate_f1"],
+                        4
+                    ),
+
+                    "Difference": round(
+                        result["difference"],
+                        4
+                    ),
+
                     "Passed": result["passed"]
+
                 })
 
             st.dataframe(
@@ -569,27 +918,37 @@ if st.session_state.get("uploads_validated", False):
             )
 
             st.write(
-                "Promotion status:",
-                "Not performed"
+                "Promotion status: Not performed"
             )
 
             if report["accepted_for_promotion"]:
+
                 st.success(
                     "Candidate passed the evaluation criteria. "
                     "It is eligible for a separate promotion review."
                 )
+
             else:
+
                 st.warning(
                     "Candidate did not pass the evaluation criteria. "
-                    "Keep the current model."
+                    "Keep the current production model."
                 )
 
             st.info(
-                "The current model remains unchanged. "
+                "The current production model remains unchanged. "
                 "Evaluation does not automatically promote candidates."
             )
 
         except Exception as error:
+
             st.error(
                 f"Retraining or evaluation failed: {error}"
             )
+
+else:
+
+    st.info(
+        "A valid labelled upload dataset is required "
+        "before retraining can begin."
+    )
