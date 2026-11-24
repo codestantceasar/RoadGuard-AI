@@ -1,11 +1,11 @@
 # RoadGuard AI
 ## Project Demonstration Video
 
-Watch the RoadGuard AI project demonstration:
+Watch the RoadGuard AI end-to-end project demonstration:
 
-[**Watch the RoadGuard AI Presentation Video**](https://drive.google.com/file/d/1u_lPZ_R61n9_FrmUmB1LnXKhVVp83WKu/view?usp=drive_link)
+[**Watch the RoadGuard AI Presentation on YouTube**](https://youtu.be/in3aur001rY)
 
-The video demonstrates the RoadGuard AI dashboard, road damage prediction, model retraining workflow, evaluation results, and AWS deployment.
+The demonstration covers the project overview, road damage prediction, data upload, model retraining, evaluation results, and AWS deployment.
 
 ### Intelligent Road Infrastructure Monitoring System
 
