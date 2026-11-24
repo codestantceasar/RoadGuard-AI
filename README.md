@@ -1,4 +1,12 @@
 # RoadGuard AI
+## Project Demonstration Video
+
+Watch the RoadGuard AI project demonstration:
+
+[**Watch the RoadGuard AI Presentation Video**](https://drive.google.com/file/d/1u_lPZ_R61n9_FrmUmB1LnXKhVVp83WKu/view?usp=drive_link)
+
+The video demonstrates the RoadGuard AI dashboard, road damage prediction, model retraining workflow, evaluation results, and AWS deployment.
+
 ### Intelligent Road Infrastructure Monitoring System
 
 RoadGuard AI is an image-based road damage classification and monitoring system powered by deep learning. It demonstrates an end-to-end Machine Learning Operations (MLOps) workflow, covering data preparation, model training, evaluation, API development, dashboard monitoring, candidate retraining, Docker deployment, AWS cloud deployment, and load testing.
